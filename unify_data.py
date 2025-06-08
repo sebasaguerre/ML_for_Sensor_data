@@ -22,7 +22,7 @@ def get_optimal_interval(dataframes: list[pd.DataFrame], time_col: str) -> float
     return min(min_intervals)
 
 
-def join_sdata(path: str) -> pd.DataFrame:
+def join_sdata(path: str, file_exception=None) -> pd.DataFrame:
     """
     Join sensor datasets into a cohessive dataset and save as CSV file.
     Adapt the new dataframe to work with optimal time interval on the 
@@ -35,7 +35,7 @@ def join_sdata(path: str) -> pd.DataFrame:
 
     # iterate over files
     for file in data_folder.iterdir():
-        if file.is_file() and file != "sens_data/Proximity.csv":
+        if file.is_file() and file != file_exception:
             df = pd.read_csv(file)
             dataframes.append(df)
 
@@ -45,7 +45,6 @@ def join_sdata(path: str) -> pd.DataFrame:
     # raise error if no time variabel found
     if time_var is None:
         raise KeyError("No time variable found. Data must be time frequency data.")
-
 
     # extrac max and min times from datasets
     min_time = min(df[time_var].min() for df in dataframes)
@@ -65,7 +64,7 @@ def join_sdata(path: str) -> pd.DataFrame:
         time_indexed_df = df.set_index(df.columns[0])
 
         # fill data by reindexing to common time
-        time_resampled = time_indexed_df.reindex(common_time, method="nearest")
+        time_resampled = time_indexed_df.reindex(common_time) # method="nearest" only if missing values need to be imputed directly
 
         if time_var in time_resampled.columns:
             time_resampled.drop(time_var, axis=1) # drop sensor time 
@@ -114,12 +113,16 @@ def safe_interpol(df: pd.DataFrame, lb: float, ub: float) -> pd.DataFrame:
     """
 
     for col in df.columns:
-        # count nans per column
-        nans = df[col].isna().sum()
-        # interpolate columnns which have missing values within the range
-        if df[col].dtype != "O":
-            if nans < ub*len(df) and nans > lb*len(df):
-                df[col].interpolate(method="linear")
+        
+        # aply interpolation only if the variable is numeric 
+        if pd.api.types.is_numeric_dtype(df[col]):
+            
+            # count nans per column
+            nan_frac = df[col].isna().sum() / len(df)
+
+            # interpolate columnns which have missing values within the range
+            if lb < nan_frac < ub:
+                df[col].interpolate(method="linear", inpace=True)
 
     return df
 
@@ -153,7 +156,7 @@ def main():
         linear_time.append(val + linear_time[idx])
 
     # join data frames, add labels and save
-    joined_df = join_sdata("sens_data")
+    joined_df = join_sdata("sens_data", file_exception="Proximity.csv")
     labeld_df = add_labels(joined_df, activ_seq, linear_time, "Activity")
     labeld_df.to_csv("joined_data.csv", index=False)
 
