@@ -1,0 +1,6 @@
+.venv/
+venv/
+__pypackages__/
+.uv/
+.DS_Store
+uv.lock
