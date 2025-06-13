@@ -170,7 +170,11 @@ def safe_interpol(df: pd.DataFrame, lb: float=0.25, ub: float=0.95, all: bool= F
     return df
 
 def get_dataset(path: str, labels: list[str]=None, rtime: list[float]=None,
-                label_col: str=None, impute: bool=False) -> pd.DataFrame:
+                label_col: str=None, impute: bool=False, custom_impute: "function"=None) -> pd.DataFrame:
+    """
+    Compact function to unify sensory/temporal data from different file,
+    add labels and impute missing values if desired
+    """
     # get all files together in one dataframe
     data = join_sdata(path)
 
@@ -183,23 +187,21 @@ def get_dataset(path: str, labels: list[str]=None, rtime: list[float]=None,
             # cummulative time at each stampoint = time[idx - 1] + current time 
             ctime.append(ctime[idx] + t_sec)
         
-        data_labeld = add_labels(data, labels, ctime, label_col)
+        # add labels 
+        data = add_labels(data, labels, ctime, label_col)
 
-        # return data with or without imputation
-        if impute:
-            return safe_interpol(data_labeld)
-        else:
-            return data_labeld
+    # add imputations
+    if impute:
+        # if custom method -> custom + interpolation
+        if custom_impute:
+            data = safe_interpol(data, edge_case = "fill")
+            return custom_impute(data)
+        # just interpolation (all values and fill in edge cases )
+        return safe_interpol(data, all=True, str = "fill")
+    # return dataset without imputation
     else:
-        # add imputations and return or just return
-        if impute:
-            return safe_interpol(data_labeld)
-        else:
-            return data_labeld
+        return data
     
-
-
-
 
 def main():
 
